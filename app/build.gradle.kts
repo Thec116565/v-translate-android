@@ -11,8 +11,8 @@ android {
         applicationId = "com.vtranslate.live"
         minSdk = 29 // Android 10+ required for AudioPlaybackCapture & modern MediaProjection
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1-clean"
+        versionCode = 3
+        versionName = "1.0.2-clean"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -20,8 +20,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("persistent") {
+            storeFile = file("vtranslate-sideload.jks")
+            storePassword = "vtranslate2026"
+            keyAlias = "vtranslate"
+            keyPassword = "vtranslate2026"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("persistent")
+        }
         release {
+            signingConfig = signingConfigs.getByName("persistent")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

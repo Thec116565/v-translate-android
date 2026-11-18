@@ -30,21 +30,21 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
 
       - name: Prepare APK Release File
-        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.1.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.2.apk
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: VTranslate-Live-Android-Debug-APK
-          path: VTranslate-Live-Android-v1.0.1.apk
+          path: VTranslate-Live-Android-v1.0.2.apk
 
       - name: Publish GitHub Release (Direct APK Download)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.1
-          name: V-Translate Live Android v1.0.1
+          tag_name: v1.0.2
+          name: V-Translate Live Android v1.0.2
           body: |
-            Bản cập nhật **V-Translate Live Android v1.0.1**:
-            - Cập nhật danh sách model Gemini mới (`gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-3.5-flash-lite`, `gemini-2.5-pro`) thay thế các model 2.0 đã ngừng hỗ trợ.
-            - Tự động bỏ qua model lỗi 404 và xoay vòng sang model/key khả dụng tiếp theo.
-          files: VTranslate-Live-Android-v1.0.1.apk
+            Bản cập nhật **V-Translate Live Android v1.0.2**:
+            - Ký APK bằng chứng chỉ cố định (`vtranslate-sideload.jks`) giúp các bản cập nhật sau cài đè trực tiếp không cần gỡ bản cũ và không mất API Key.
+            - Đã cập nhật danh sách model Gemini mới (`gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-3.5-flash-lite`, `gemini-2.5-pro`) & tự động bỏ qua model lỗi 404.
+          files: VTranslate-Live-Android-v1.0.2.apk
