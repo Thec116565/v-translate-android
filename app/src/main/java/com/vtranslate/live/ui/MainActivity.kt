@@ -15,8 +15,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,11 +59,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.vtranslate.live.R
 import com.vtranslate.live.data.GeminiPoolClient
 import com.vtranslate.live.data.SettingsRepository
 import com.vtranslate.live.domain.CaptureMode
@@ -168,14 +173,28 @@ fun VTranslateMainScreen(
         requestMediaProjection(context, mediaProjectionLauncher::launch)
     }
 
-    Scaffold(
-        topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF0F172A))
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.app_bg),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0x450B1120))
+        )
+
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xBF0F172A))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
                 Text(
                     text = "V-Translate Live Android",
                     fontSize = 20.sp,
@@ -273,6 +292,7 @@ fun VTranslateMainScreen(
                     onClear = { LiveSessionStateBus.clearHistory() }
                 )
             }
+        }
         }
     }
 }
