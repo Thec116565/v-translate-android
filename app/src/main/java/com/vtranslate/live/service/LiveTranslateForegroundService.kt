@@ -22,7 +22,9 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -68,6 +70,7 @@ class LiveTranslateForegroundService : Service() {
     private lateinit var ttsSpeaker: TtsAudioDuckerSpeaker
 
     private var mediaProjection: MediaProjection? = null
+    private var projectionCallback: MediaProjection.Callback? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var audioRecord: AudioRecord? = null
@@ -138,15 +141,21 @@ class LiveTranslateForegroundService : Service() {
     }
 
     private fun startLiveSession(resultCode: Int, resultData: Intent) {
-        val notification = buildForegroundNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            val notification = buildForegroundNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            LiveSessionStateBus.log("❌ Lỗi Foreground Service: ${e.message}")
+            stopSelf()
+            return
         }
 
         stopCaptureResources()
@@ -160,7 +169,22 @@ class LiveTranslateForegroundService : Service() {
         ttsSpeaker.enableDucking = cfg.enableAudioDucking
 
         val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjection = mpm.getMediaProjection(resultCode, resultData)
+        val proj = mpm.getMediaProjection(resultCode, resultData)
+        if (proj == null) {
+            LiveSessionStateBus.log("❌ Không nhận được quyền MediaProjection từ hệ thống.")
+            stopSelf()
+            return
+        }
+        val cb = object : MediaProjection.Callback() {
+            override fun onStop() {
+                LiveSessionStateBus.log("⏹ Hệ thống đã dừng phiên ghi màn hình.")
+                stopLiveSession()
+                stopSelf()
+            }
+        }
+        proj.registerCallback(cb, Handler(Looper.getMainLooper()))
+        projectionCallback = cb
+        mediaProjection = proj
 
         overlayController.showSubtitleOverlay(cfg)
         LiveSessionStateBus.setRunning(true)
@@ -176,29 +200,29 @@ class LiveTranslateForegroundService : Service() {
     }
 
     private suspend fun runScreenOcrLoop() {
-        val dm = resources.displayMetrics
-        val screenW = dm.widthPixels
-        val screenH = dm.heightPixels
-        val density = dm.densityDpi
-
-        val reader = ImageReader.newInstance(screenW, screenH, PixelFormat.RGBA_8888, 2)
-        imageReader = reader
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "VTranslateLiveOCR",
-            screenW,
-            screenH,
-            density,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader.surface,
-            null,
-            null
-        )
-
         var currentLangKey = ""
         var recognizer: TextRecognizer? = null
         var prevLumaSample: ByteArray? = null
 
         try {
+            val dm = resources.displayMetrics
+            val screenW = dm.widthPixels.coerceAtLeast(360)
+            val screenH = dm.heightPixels.coerceAtLeast(640)
+            val density = dm.densityDpi.coerceAtLeast(160)
+
+            val reader = ImageReader.newInstance(screenW, screenH, PixelFormat.RGBA_8888, 2)
+            imageReader = reader
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "VTranslateLiveOCR",
+                screenW,
+                screenH,
+                density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                reader.surface,
+                null,
+                null
+            )
+
             while (serviceScope.isActive && LiveSessionStateBus.isRunning.value) {
                 val cfg = settingsRepo.loadConfig()
                 val intervalMs = (1000f / cfg.sampleFps.coerceIn(1.0f, 8.0f)).toLong()
@@ -458,6 +482,10 @@ class LiveTranslateForegroundService : Service() {
         runCatching { audioRecord?.stop() }
         runCatching { audioRecord?.release() }
         audioRecord = null
+        projectionCallback?.let { cb ->
+            runCatching { mediaProjection?.unregisterCallback(cb) }
+        }
+        projectionCallback = null
         runCatching { mediaProjection?.stop() }
         mediaProjection = null
     }

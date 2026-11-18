@@ -280,6 +280,14 @@ fun VTranslateMainScreen(
                             }
                             onResult(res.fold(onSuccess = { "✅ $it" }, onFailure = { "❌ ${it.message}" }))
                         }
+                    },
+                    onFetchModels = { key, onResult ->
+                        scope.launch {
+                            val res = withContext(Dispatchers.IO) {
+                                geminiTester.fetchAvailableModels(key)
+                            }
+                            onResult(res)
+                        }
                     }
                 )
                 2 -> StyleAndVoiceTab(
@@ -514,9 +522,11 @@ private fun ApiPoolTab(
     config: LiveConfig,
     onUpdateConfig: (LiveConfig) -> Unit,
     onTestKey: (String, String, (String) -> Unit) -> Unit,
+    onFetchModels: (String, (Result<List<String>>) -> Unit) -> Unit,
 ) {
     var keysText by remember(config.apiKeys) { mutableStateOf(config.apiKeys.joinToString("\n")) }
     var testResult by remember { mutableStateOf("Chưa kiểm tra.") }
+    var modelListText by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -582,7 +592,7 @@ private fun ApiPoolTab(
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("🤖 Mô Hình Gemini Flash Ưu Tiên", fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
-                val models = listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-pro")
+                val models = (config.flashModelPool + listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-pro")).distinct()
                 models.forEach { m ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
@@ -591,6 +601,37 @@ private fun ApiPoolTab(
                         )
                         Text(m, fontSize = 13.sp)
                     }
+                }
+                OutlinedButton(
+                    onClick = {
+                        val firstKey = keysText.split(",", "\n").map { it.trim() }.firstOrNull { it.isNotEmpty() }
+                        if (firstKey == null) {
+                            modelListText = "❌ Hãy nhập ít nhất 1 API Key ở trên trước."
+                        } else {
+                            modelListText = "⏳ Đang truy vấn Google AI Studio..."
+                            onFetchModels(firstKey) { res ->
+                                res.onSuccess { list ->
+                                    val flashList = list.filter { it.contains("flash", ignoreCase = true) }
+                                        .ifEmpty { list.take(6) }
+                                    onUpdateConfig(
+                                        config.copy(
+                                            flashModelPool = flashList,
+                                            preferredModel = flashList.firstOrNull() ?: config.preferredModel
+                                        )
+                                    )
+                                    modelListText = "✅ Tìm thấy ${list.size} model hoạt động (${flashList.joinToString(", ")})"
+                                }.onFailure { err ->
+                                    modelListText = "❌ Lỗi lấy DS model: ${err.message}"
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("🔄 Lấy & Xác nhận DS Model còn hoạt động")
+                }
+                if (modelListText.isNotBlank()) {
+                    Text(modelListText, fontSize = 12.sp, color = Color(0xFF4ADE80))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(

@@ -30,21 +30,21 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
 
       - name: Prepare APK Release File
-        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.3.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.4.apk
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: VTranslate-Live-Android-Debug-APK
-          path: VTranslate-Live-Android-v1.0.3.apk
+          path: VTranslate-Live-Android-v1.0.4.apk
 
       - name: Publish GitHub Release (Direct APK Download)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.3
-          name: V-Translate Live Android v1.0.3
+          tag_name: v1.0.4
+          name: V-Translate Live Android v1.0.4
           body: |
-            Bản cập nhật **V-Translate Live Android v1.0.3**:
-            - Bổ sung ảnh nền Dark-Mode hiện đại (`app_bg.jpg`) với lớp phủ trong suốt dễ đọc chữ.
-            - Dùng chung chứng chỉ ký cố định, cài đè trực tiếp lên bản `v1.0.2` không mất API Key.
-          files: VTranslate-Live-Android-v1.0.3.apk
+            Bản cập nhật **V-Translate Live Android v1.0.4**:
+            - Sửa triệt để lỗi crash Android 14+ khi bấm Bắt đầu dịch màn hình (bổ sung `MediaProjection.registerCallback` trước khi tạo `VirtualDisplay` + bọc an toàn Foreground Service).
+            - Thêm nút **"🔄 Lấy & Xác nhận DS Model còn hoạt động"** trong tab `🔑 API Pool` để kiểm tra và tự động cập nhật các model Gemini còn sống trực tiếp từ Google AI Studio.
+          files: VTranslate-Live-Android-v1.0.4.apk

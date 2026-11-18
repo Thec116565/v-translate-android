@@ -72,6 +72,39 @@ class GeminiPoolClient {
         return active + cooling
     }
 
+    fun fetchAvailableModels(apiKey: String): Result<List<String>> {
+        return runCatching {
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}"
+            val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+            }
+            try {
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val respText = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+                if (code !in 200..299) {
+                    throw HttpStatusException(code, "HTTP $code: ${respText.take(200)}")
+                }
+                val root = JSONObject(respText)
+                val arr = root.optJSONArray("models") ?: JSONArray()
+                val out = mutableListOf<String>()
+                for (i in 0 until arr.length()) {
+                    val m = arr.optJSONObject(i) ?: continue
+                    val name = m.optString("name", "").removePrefix("models/")
+                    val methods = m.optJSONArray("supportedGenerationMethods")?.toString() ?: ""
+                    if (name.contains("gemini", ignoreCase = true) && methods.contains("generateContent")) {
+                        out.add(name)
+                    }
+                }
+                out.distinct().sorted()
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
     fun testConnection(apiKey: String, model: String): Result<String> {
         return runCatching {
             val body = JSONObject().apply {
