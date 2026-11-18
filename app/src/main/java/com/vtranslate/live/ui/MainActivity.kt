@@ -224,32 +224,30 @@ fun VTranslateMainScreen(
                         if (config.apiKeys.isEmpty()) {
                             Toast.makeText(context, "Hãy nhập ít nhất 1 Google AI Studio API Key ở tab '🔑 API Pool'!", Toast.LENGTH_LONG).show()
                             selectedTab = 1
-                            return@LiveControlTab
-                        }
-                        if (!Settings.canDrawOverlays(context)) {
+                        } else if (!Settings.canDrawOverlays(context)) {
                             Toast.makeText(context, "Vui lòng cấp quyền 'Hiển thị trên ứng dụng khác'", Toast.LENGTH_LONG).show()
                             val intent = Intent(
                                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                 Uri.parse("package:${context.packageName}")
                             )
                             context.startActivity(intent)
-                            return@LiveControlTab
-                        }
-                        val perms = mutableListOf<String>()
-                        if (config.captureMode == CaptureMode.INTERNAL_AUDIO &&
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            perms.add(Manifest.permission.RECORD_AUDIO)
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            perms.add(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                        if (perms.isNotEmpty()) {
-                            audioPermLauncher.launch(perms.toTypedArray())
                         } else {
-                            requestMediaProjection(context, mediaProjectionLauncher::launch)
+                            val perms = mutableListOf<String>()
+                            if (config.captureMode == CaptureMode.INTERNAL_AUDIO &&
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                perms.add(Manifest.permission.RECORD_AUDIO)
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                perms.add(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                            if (perms.isNotEmpty()) {
+                                audioPermLauncher.launch(perms.toTypedArray())
+                            } else {
+                                requestMediaProjection(context, mediaProjectionLauncher::launch)
+                            }
                         }
                     }
                 )
