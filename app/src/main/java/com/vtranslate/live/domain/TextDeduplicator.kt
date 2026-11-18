@@ -76,7 +76,7 @@ class TextDeduplicator(
     }
 
     companion object {
-        private val NON_WORD_REGEX = Regex("[\\s\\p{Punct}]+")
+        private val NON_WORD_REGEX = Regex("[\\s\\p{P}\\p{S}]+")
 
         fun normalize(text: String): String =
             NON_WORD_REGEX.replace(text.lowercase(), "")
