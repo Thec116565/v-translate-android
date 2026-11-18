@@ -18,17 +18,20 @@ class SettingsRepository(context: Context) {
 
         val rawModels = prefs.getString(
             "flash_models",
-            "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite"
+            "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-2.5-pro"
         ) ?: ""
         val models = rawModels.split(",")
             .map { it.trim() }
-            .filter { it.isNotEmpty() }
+            .filter { it.isNotEmpty() && !it.startsWith("gemini-2.0") }
 
         return LiveConfig(
             apiKeys = keys,
-            preferredModel = prefs.getString("preferred_model", "gemini-2.5-flash") ?: "gemini-2.5-flash",
+            preferredModel = prefs.getString("preferred_model", "gemini-2.5-flash")
+                ?.takeIf { !it.startsWith("gemini-2.0") } ?: "gemini-2.5-flash",
             autoRotateFlashModels = prefs.getBoolean("auto_rotate_flash", true),
-            flashModelPool = models.ifEmpty { listOf("gemini-2.5-flash", "gemini-2.0-flash") },
+            flashModelPool = models.ifEmpty {
+                listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite")
+            },
             captureMode = CaptureMode.fromId(prefs.getString("capture_mode", CaptureMode.SCREEN_OCR.id)),
             sourceLanguage = prefs.getString("source_lang", "Tự động nhận diện (Auto)") ?: "Tự động nhận diện (Auto)",
             targetLanguage = prefs.getString("target_lang", "Tiếng Việt") ?: "Tiếng Việt",

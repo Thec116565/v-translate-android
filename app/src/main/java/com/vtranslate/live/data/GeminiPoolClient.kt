@@ -125,6 +125,11 @@ class GeminiPoolClient {
                     cooldownMap["$apiKey|$model"] = System.currentTimeMillis() + 60_000L
                     continue
                 }
+                if (e.code == 404) {
+                    // Retired or unavailable model: skip for 24h and rotate to next model
+                    cooldownMap["$apiKey|$model"] = System.currentTimeMillis() + 86_400_000L
+                    continue
+                }
             } catch (e: Exception) {
                 lastError = e
             }
@@ -170,8 +175,12 @@ class GeminiPoolClient {
                 return Result.success(parsed)
             } catch (e: HttpStatusException) {
                 lastError = e
-                if (e.code == 429) {
+                if (e.code == 429 || e.message?.contains("RESOURCE_EXHAUSTED", ignoreCase = true) == true) {
                     cooldownMap["$apiKey|$model"] = System.currentTimeMillis() + 60_000L
+                    continue
+                }
+                if (e.code == 404) {
+                    cooldownMap["$apiKey|$model"] = System.currentTimeMillis() + 86_400_000L
                     continue
                 }
             } catch (e: Exception) {

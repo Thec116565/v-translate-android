@@ -24,8 +24,8 @@ data class LiveConfig(
     val flashModelPool: List<String> = listOf(
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite"
+        "gemini-3.5-flash-lite",
+        "gemini-2.5-pro"
     ),
     val captureMode: CaptureMode = CaptureMode.SCREEN_OCR,
     val sourceLanguage: String = "Tự động nhận diện (Auto)",

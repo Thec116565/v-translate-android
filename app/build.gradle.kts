@@ -11,8 +11,8 @@ android {
         applicationId = "com.vtranslate.live"
         minSdk = 29 // Android 10+ required for AudioPlaybackCapture & modern MediaProjection
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0-clean"
+        versionCode = 2
+        versionName = "1.0.1-clean"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
