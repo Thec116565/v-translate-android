@@ -52,6 +52,7 @@ class SettingsRepository(context: Context) {
             enableAudioDucking = prefs.getBoolean("enable_ducking", true),
             ttsBaseSpeed = prefs.getFloat("tts_speed", 1.15f),
             ttsPitch = prefs.getFloat("tts_pitch", 1.0f),
+            ttsVoiceName = prefs.getString("tts_voice_name", "") ?: "",
             overlayFontSizeSp = prefs.getInt("overlay_font_sp", 20),
             overlayTextColorHex = prefs.getString("overlay_color", "#FFE600") ?: "#FFE600",
             overlayBgAlpha = prefs.getFloat("overlay_alpha", 0.82f),
@@ -77,6 +78,7 @@ class SettingsRepository(context: Context) {
             .putBoolean("enable_ducking", cfg.enableAudioDucking)
             .putFloat("tts_speed", cfg.ttsBaseSpeed)
             .putFloat("tts_pitch", cfg.ttsPitch)
+            .putString("tts_voice_name", cfg.ttsVoiceName)
             .putInt("overlay_font_sp", cfg.overlayFontSizeSp)
             .putString("overlay_color", cfg.overlayTextColorHex)
             .putFloat("overlay_alpha", cfg.overlayBgAlpha)

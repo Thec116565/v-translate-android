@@ -37,6 +37,7 @@ import com.vtranslate.live.data.GeminiPoolClient
 import com.vtranslate.live.data.SettingsRepository
 import com.vtranslate.live.domain.CaptureMode
 import com.vtranslate.live.domain.LiveConfig
+import com.vtranslate.live.domain.OcrRegionPct
 import com.vtranslate.live.domain.TextDeduplicator
 import com.vtranslate.live.domain.WavAudioEncoder
 import com.vtranslate.live.ui.MainActivity
@@ -78,6 +79,74 @@ class LiveTranslateForegroundService : Service() {
     private val isTtsSpeaking = AtomicBoolean(false)
     private var sessionStartEpochMs: Long = 0L
 
+    @Volatile
+    private var cachedConfig: LiveConfig = LiveConfig()
+
+    private val toolbarCallbacks = object : FloatingOverlayController.ToolbarCallbacks {
+        override fun onTogglePause() = handleTogglePause()
+
+        override fun onStop() {
+            stopLiveSession()
+            stopSelf()
+        }
+
+        override fun onCycleModel() {
+            val cfg = cachedConfig
+            val pool = cfg.flashModelPool.ifEmpty {
+                listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview")
+            }
+            val curIdx = pool.indexOf(cfg.preferredModel)
+            val nextModel = pool[(curIdx + 1) % pool.size]
+            val updated = cfg.copy(preferredModel = nextModel)
+            cachedConfig = updated
+            settingsRepo.saveConfig(updated)
+            overlayController.updateToolbarState(
+                paused = LiveSessionStateBus.isPaused.value,
+                model = nextModel,
+                mode = updated.captureMode,
+                clickThrough = LiveSessionStateBus.clickThrough.value,
+            )
+            overlayController.showToastBanner("🤖 Đã chuyển sang: $nextModel")
+            LiveSessionStateBus.log("🤖 Đổi model nhanh -> $nextModel")
+        }
+
+        override fun onSwitchMode() {
+            val cfg = cachedConfig
+            val nextMode = if (cfg.captureMode == CaptureMode.SCREEN_OCR) {
+                CaptureMode.INTERNAL_AUDIO
+            } else {
+                CaptureMode.SCREEN_OCR
+            }
+            val updated = cfg.copy(captureMode = nextMode)
+            cachedConfig = updated
+            settingsRepo.saveConfig(updated)
+            overlayController.updateToolbarState(
+                paused = LiveSessionStateBus.isPaused.value,
+                model = updated.preferredModel,
+                mode = nextMode,
+                clickThrough = LiveSessionStateBus.clickThrough.value,
+            )
+            overlayController.showToastBanner("🔄 Chế độ: ${nextMode.titleVi}")
+            LiveSessionStateBus.log("🔄 Chuyển nhanh sang: ${nextMode.titleVi}")
+            restartCaptureLoopOnly(nextMode)
+        }
+
+        override fun onToggleClickThrough() {
+            val next = !LiveSessionStateBus.clickThrough.value
+            val updated = cachedConfig.copy(overlayClickThrough = next)
+            cachedConfig = updated
+            settingsRepo.saveConfig(updated)
+            overlayController.setClickThrough(next)
+            overlayController.showToastBanner(if (next) "🔒 Đã khóa xuyên chạm" else "🔓 Đã mở khóa chạm")
+        }
+
+        override fun onRegionEdited(newRegion: OcrRegionPct) {
+            val updated = cachedConfig.copy(ocrRegion = newRegion)
+            cachedConfig = updated
+            settingsRepo.saveConfig(updated)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         settingsRepo = SettingsRepository(this)
@@ -105,31 +174,23 @@ class LiveTranslateForegroundService : Service() {
                     stopSelf()
                 }
             }
-            ACTION_TOGGLE_PAUSE -> {
-                val nextPaused = !LiveSessionStateBus.isPaused.value
-                LiveSessionStateBus.setPaused(nextPaused)
-                if (nextPaused) {
-                    ttsSpeaker.stopImmediately()
-                    LiveSessionStateBus.log("⏸ Đã tạm dừng dịch trực tiếp.")
-                } else {
-                    LiveSessionStateBus.log("▶ Tiếp tục dịch trực tiếp.")
-                }
-            }
-            ACTION_TOGGLE_CLICK_THROUGH -> {
-                val next = !LiveSessionStateBus.clickThrough.value
-                overlayController.setClickThrough(next)
-                LiveSessionStateBus.log(
-                    if (next) "🔒 Đã bật Khóa xuyên chạm (Lướt Douyin tự do)."
-                    else "🔓 Đã mở khóa chạm (Có thể kéo di chuyển khung phụ đề)."
-                )
-            }
+            ACTION_TOGGLE_PAUSE -> handleTogglePause()
+            ACTION_TOGGLE_CLICK_THROUGH -> toolbarCallbacks.onToggleClickThrough()
             ACTION_REFRESH_STYLE -> {
                 val cfg = settingsRepo.loadConfig()
+                cachedConfig = cfg
                 overlayController.applyStyle(cfg)
                 overlayController.setClickThrough(cfg.overlayClickThrough)
+                overlayController.updateToolbarState(
+                    paused = LiveSessionStateBus.isPaused.value,
+                    model = cfg.preferredModel,
+                    mode = cfg.captureMode,
+                    clickThrough = cfg.overlayClickThrough,
+                )
                 overlayController.showOrUpdateRegionGuide(cfg.ocrRegion, LiveSessionStateBus.showRegionBox.value)
                 ttsSpeaker.baseSpeed = cfg.ttsBaseSpeed
                 ttsSpeaker.basePitch = cfg.ttsPitch
+                ttsSpeaker.selectedVoiceName = cfg.ttsVoiceName
                 ttsSpeaker.enableDucking = cfg.enableAudioDucking
             }
             ACTION_STOP -> {
@@ -160,12 +221,14 @@ class LiveTranslateForegroundService : Service() {
 
         stopCaptureResources()
         val cfg = settingsRepo.loadConfig()
+        cachedConfig = cfg
         geminiClient.clearContext()
         deduplicator.reset()
         sessionStartEpochMs = System.currentTimeMillis()
 
         ttsSpeaker.baseSpeed = cfg.ttsBaseSpeed
         ttsSpeaker.basePitch = cfg.ttsPitch
+        ttsSpeaker.selectedVoiceName = cfg.ttsVoiceName
         ttsSpeaker.enableDucking = cfg.enableAudioDucking
 
         val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -187,11 +250,43 @@ class LiveTranslateForegroundService : Service() {
         mediaProjection = proj
 
         overlayController.showSubtitleOverlay(cfg)
+        overlayController.showVerticalToolbar(cfg, toolbarCallbacks)
         LiveSessionStateBus.setRunning(true)
         LiveSessionStateBus.log("🚀 Đã bật Dịch Trực Tiếp (${cfg.captureMode.titleVi}) -> ${cfg.targetLanguage}")
 
+        restartCaptureLoopOnly(cfg.captureMode)
+    }
+
+    private fun handleTogglePause() {
+        val nextPaused = !LiveSessionStateBus.isPaused.value
+        LiveSessionStateBus.setPaused(nextPaused)
+        if (nextPaused) {
+            ttsSpeaker.stopImmediately()
+            LiveSessionStateBus.log("⏸ Đã tạm dừng dịch trực tiếp.")
+        } else {
+            LiveSessionStateBus.log("▶ Tiếp tục dịch trực tiếp.")
+        }
+        overlayController.updateToolbarState(
+            paused = nextPaused,
+            model = cachedConfig.preferredModel,
+            mode = cachedConfig.captureMode,
+            clickThrough = LiveSessionStateBus.clickThrough.value,
+        )
+    }
+
+    private fun restartCaptureLoopOnly(mode: CaptureMode) {
+        captureJob?.cancel()
+        captureJob = null
+        runCatching { virtualDisplay?.release() }
+        virtualDisplay = null
+        runCatching { imageReader?.close() }
+        imageReader = null
+        runCatching { audioRecord?.stop() }
+        runCatching { audioRecord?.release() }
+        audioRecord = null
+
         captureJob = serviceScope.launch {
-            if (cfg.captureMode == CaptureMode.SCREEN_OCR) {
+            if (mode == CaptureMode.SCREEN_OCR) {
                 runScreenOcrLoop()
             } else {
                 runInternalAudioLoop()
@@ -224,7 +319,7 @@ class LiveTranslateForegroundService : Service() {
             )
 
             while (serviceScope.isActive && LiveSessionStateBus.isRunning.value) {
-                val cfg = settingsRepo.loadConfig()
+                val cfg = cachedConfig
                 val intervalMs = (1000f / cfg.sampleFps.coerceIn(1.0f, 8.0f)).toLong()
 
                 if (LiveSessionStateBus.isPaused.value) {
@@ -272,6 +367,10 @@ class LiveTranslateForegroundService : Service() {
         }
     }
 
+    /**
+     * Memory-optimized cropped screen capture: slices ONLY the target vertical row band [y .. y+h]
+     * from the ImageReader ByteBuffer instead of allocating a full-screen 10MB Bitmap per frame.
+     */
     private fun acquireCroppedScreenBitmap(reader: ImageReader, cfg: LiveConfig): Bitmap? {
         val image = reader.acquireLatestImage() ?: return null
         try {
@@ -279,21 +378,31 @@ class LiveTranslateForegroundService : Service() {
             val buffer = plane.buffer
             val pixelStride = plane.pixelStride
             val rowStride = plane.rowStride
-            val rowPadding = rowStride - pixelStride * image.width
-
-            val fullW = image.width + rowPadding / pixelStride
-            val fullBmp = Bitmap.createBitmap(fullW, image.height, Bitmap.Config.ARGB_8888)
-            fullBmp.copyPixelsFromBuffer(buffer)
 
             val r = cfg.ocrRegion
             val x = (r.leftPct.coerceIn(0f, 0.9f) * image.width).toInt()
             val y = (r.topPct.coerceIn(0f, 0.9f) * image.height).toInt()
             val w = ((r.rightPct - r.leftPct).coerceIn(0.1f, 1.0f) * image.width).toInt()
-                .coerceAtMost(image.width - x)
+                .coerceAtMost(image.width - x).coerceAtLeast(32)
             val h = ((r.bottomPct - r.topPct).coerceIn(0.05f, 1.0f) * image.height).toInt()
-                .coerceAtMost(image.height - y)
+                .coerceAtMost(image.height - y).coerceAtLeast(24)
 
-            val cropped = Bitmap.createBitmap(fullBmp, x, y, w.coerceAtLeast(32), h.coerceAtLeast(24))
+            val fullStrideW = rowStride / pixelStride
+            val startOffset = y * rowStride
+            if (startOffset + h * rowStride <= buffer.capacity()) {
+                buffer.position(startOffset)
+                val bandBmp = Bitmap.createBitmap(fullStrideW, h, Bitmap.Config.ARGB_8888)
+                bandBmp.copyPixelsFromBuffer(buffer.slice())
+                val cropped = Bitmap.createBitmap(bandBmp, x, 0, w.coerceAtMost(bandBmp.width - x), h)
+                bandBmp.recycle()
+                return cropped
+            }
+
+            // Fallback if row padding differs on the final row
+            buffer.rewind()
+            val fullBmp = Bitmap.createBitmap(fullStrideW, image.height, Bitmap.Config.ARGB_8888)
+            fullBmp.copyPixelsFromBuffer(buffer)
+            val cropped = Bitmap.createBitmap(fullBmp, x, y, w, h)
             fullBmp.recycle()
             return cropped
         } catch (_: Exception) {

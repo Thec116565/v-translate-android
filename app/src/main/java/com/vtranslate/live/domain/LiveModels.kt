@@ -36,6 +36,7 @@ data class LiveConfig(
     val enableAudioDucking: Boolean = true,
     val ttsBaseSpeed: Float = 1.15f,
     val ttsPitch: Float = 1.0f,
+    val ttsVoiceName: String = "",
     val overlayFontSizeSp: Int = 20,
     val overlayTextColorHex: String = "#FFE600",
     val overlayBgAlpha: Float = 0.82f,

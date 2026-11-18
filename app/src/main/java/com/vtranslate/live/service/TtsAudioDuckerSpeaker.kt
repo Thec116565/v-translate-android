@@ -7,13 +7,22 @@ import android.media.AudioManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
+data class TtsVoiceOption(
+    val name: String,
+    val displayLabel: String,
+    val localeTag: String,
+    val isNetworkRequired: Boolean,
+)
+
 /**
  * Real-Time Android TTS Dubbing Speaker with:
+ * - Multiple selectable system/neural voices per language
  * - Automatic Audio Focus Ducking (AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK lowers Douyin/TikTok volume while speaking)
  * - Dynamic Speed Catch-Up when subtitles arrive rapidly
  * - Anti-Feedback Flag so Internal Audio Capture knows when TTS is actively speaking
@@ -34,6 +43,7 @@ class TtsAudioDuckerSpeaker(
     var baseSpeed: Float = 1.15f
     var basePitch: Float = 1.0f
     var enableDucking: Boolean = true
+    var selectedVoiceName: String = ""
 
     private val audioFocusRequest: AudioFocusRequest = AudioFocusRequest.Builder(
         AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
@@ -70,24 +80,71 @@ class TtsAudioDuckerSpeaker(
         }
     }
 
+    fun listVoicesForLanguage(targetLanguage: String): List<TtsVoiceOption> {
+        if (!isReady) return emptyList()
+        val engine = tts ?: return emptyList()
+        val prefix = languagePrefix(targetLanguage)
+        val voices: Set<Voice> = runCatching { engine.voices }.getOrNull() ?: return emptyList()
+        return voices
+            .filter { v ->
+                val lang = v.locale.language.lowercase()
+                lang == prefix || v.locale.toLanguageTag().lowercase().startsWith(prefix)
+            }
+            .sortedWith(compareBy<Voice> { it.isNetworkConnectionRequired }.thenBy { it.name })
+            .mapIndexed { idx, v ->
+                val netTag = if (v.isNetworkConnectionRequired) "Online" else "Offline"
+                val tag = v.locale.toLanguageTag()
+                val shortCode = v.name.substringAfterLast("-").take(14)
+                TtsVoiceOption(
+                    name = v.name,
+                    displayLabel = "Giọng ${idx + 1} ($tag · $netTag · $shortCode)",
+                    localeTag = tag,
+                    isNetworkRequired = v.isNetworkConnectionRequired,
+                )
+            }
+    }
+
+    fun previewVoice(sampleText: String, targetLanguage: String, voiceName: String) {
+        selectedVoiceName = voiceName
+        enqueueSpeech(sampleText, targetLanguage)
+    }
+
+    private fun languagePrefix(targetLanguage: String): String = when {
+        targetLanguage.contains("Việt", ignoreCase = true) -> "vi"
+        targetLanguage.contains("English", ignoreCase = true) -> "en"
+        targetLanguage.contains("中", ignoreCase = true) -> "zh"
+        targetLanguage.contains("日本", ignoreCase = true) -> "ja"
+        targetLanguage.contains("한국", ignoreCase = true) -> "ko"
+        targetLanguage.contains("ไทย", ignoreCase = true) -> "th"
+        else -> "vi"
+    }
+
+    private fun applyTargetVoiceAndLocale(engine: TextToSpeech, targetLanguage: String) {
+        if (selectedVoiceName.isNotBlank()) {
+            val match = runCatching { engine.voices?.firstOrNull { it.name == selectedVoiceName } }.getOrNull()
+            if (match != null) {
+                engine.voice = match
+                return
+            }
+        }
+        val targetLocale = when (languagePrefix(targetLanguage)) {
+            "en" -> Locale.US
+            "zh" -> Locale.SIMPLIFIED_CHINESE
+            "ja" -> Locale.JAPANESE
+            "ko" -> Locale.KOREAN
+            else -> Locale("vi", "VN")
+        }
+        engine.language = targetLocale
+    }
+
     fun enqueueSpeech(text: String, targetLanguage: String = "Tiếng Việt") {
         val cleaned = text.trim()
         if (cleaned.isEmpty()) return
 
-        // Update locale dynamically if user changes target language
         if (isReady) {
-            val targetLocale = when {
-                targetLanguage.contains("Việt", ignoreCase = true) -> Locale("vi", "VN")
-                targetLanguage.contains("English", ignoreCase = true) -> Locale.US
-                targetLanguage.contains("中", ignoreCase = true) -> Locale.SIMPLIFIED_CHINESE
-                targetLanguage.contains("日本", ignoreCase = true) -> Locale.JAPANESE
-                targetLanguage.contains("한국", ignoreCase = true) -> Locale.KOREAN
-                else -> Locale("vi", "VN")
-            }
-            tts?.language = targetLocale
+            tts?.let { applyTargetVoiceAndLocale(it, targetLanguage) }
         }
 
-        // Prevent runaway queue if video speaks extremely fast
         while (queue.size >= 4) {
             queue.poll()
         }
@@ -105,7 +162,6 @@ class TtsAudioDuckerSpeaker(
         val now = System.currentTimeMillis()
         var nextItem = queue.poll()
         while (nextItem != null && now - nextItem.second > 7_500L && queue.isNotEmpty()) {
-            // Drop stale sentence older than 7.5s if newer ones are waiting
             nextItem = queue.poll()
         }
 
@@ -150,15 +206,11 @@ class TtsAudioDuckerSpeaker(
     }
 
     private fun requestDuckingFocus() {
-        runCatching {
-            audioManager.requestAudioFocus(audioFocusRequest)
-        }
+        runCatching { audioManager.requestAudioFocus(audioFocusRequest) }
     }
 
     private fun abandonDuckingFocus() {
-        runCatching {
-            audioManager.abandonAudioFocusRequest(audioFocusRequest)
-        }
+        runCatching { audioManager.abandonAudioFocusRequest(audioFocusRequest) }
     }
 
     fun stopImmediately() {

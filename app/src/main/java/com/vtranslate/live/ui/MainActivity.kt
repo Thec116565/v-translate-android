@@ -75,6 +75,8 @@ import com.vtranslate.live.domain.LiveSubtitleCue
 import com.vtranslate.live.service.FloatingOverlayController
 import com.vtranslate.live.service.LiveSessionStateBus
 import com.vtranslate.live.service.LiveTranslateForegroundService
+import com.vtranslate.live.service.TtsAudioDuckerSpeaker
+import com.vtranslate.live.service.TtsVoiceOption
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -83,12 +85,14 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var settingsRepo: SettingsRepository
     private lateinit var overlayPreviewController: FloatingOverlayController
+    private lateinit var previewSpeaker: TtsAudioDuckerSpeaker
     private val geminiTester = GeminiPoolClient()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settingsRepo = SettingsRepository(this)
         overlayPreviewController = FloatingOverlayController(this)
+        previewSpeaker = TtsAudioDuckerSpeaker(this)
 
         setContent {
             val darkScheme = darkColorScheme(
@@ -105,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     VTranslateMainScreen(
                         settingsRepo = settingsRepo,
                         overlayPreviewController = overlayPreviewController,
+                        previewSpeaker = previewSpeaker,
                         geminiTester = geminiTester
                     )
                 }
@@ -114,6 +119,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         overlayPreviewController.showOrUpdateRegionGuide(settingsRepo.loadConfig().ocrRegion, false)
+        previewSpeaker.shutdown()
         super.onDestroy()
     }
 }
@@ -122,6 +128,7 @@ class MainActivity : ComponentActivity() {
 fun VTranslateMainScreen(
     settingsRepo: SettingsRepository,
     overlayPreviewController: FloatingOverlayController,
+    previewSpeaker: TtsAudioDuckerSpeaker,
     geminiTester: GeminiPoolClient,
 ) {
     val context = LocalContext.current
@@ -292,6 +299,7 @@ fun VTranslateMainScreen(
                 )
                 2 -> StyleAndVoiceTab(
                     config = config,
+                    previewSpeaker = previewSpeaker,
                     onUpdateConfig = ::updateAndSave
                 )
                 3 -> HistoryTranscriptTab(
@@ -648,8 +656,13 @@ private fun ApiPoolTab(
 @Composable
 private fun StyleAndVoiceTab(
     config: LiveConfig,
+    previewSpeaker: TtsAudioDuckerSpeaker,
     onUpdateConfig: (LiveConfig) -> Unit,
 ) {
+    var availableVoices by remember(config.targetLanguage) {
+        mutableStateOf(previewSpeaker.listVoicesForLanguage(config.targetLanguage))
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -657,7 +670,7 @@ private fun StyleAndVoiceTab(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xD91E293B)),
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -683,6 +696,64 @@ private fun StyleAndVoiceTab(
                     onValueChange = { onUpdateConfig(config.copy(ttsBaseSpeed = it)) },
                     valueRange = 0.85f..1.50f
                 )
+                Text("Cao độ giọng (Pitch): ${String.format("%.2f", config.ttsPitch)}", fontSize = 13.sp)
+                Slider(
+                    value = config.ttsPitch,
+                    onValueChange = { onUpdateConfig(config.copy(ttsPitch = it)) },
+                    valueRange = 0.70f..1.35f
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("🎙 Chọn Giọng Đọc (${config.targetLanguage}):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    OutlinedButton(onClick = {
+                        availableVoices = previewSpeaker.listVoicesForLanguage(config.targetLanguage)
+                    }) {
+                        Text("🔄 Quét giọng (${availableVoices.size})", fontSize = 11.sp)
+                    }
+                }
+
+                if (availableVoices.isEmpty()) {
+                    Text(
+                        "Đang dùng giọng mặc định hệ thống (Bấm 'Quét giọng' để tải danh sách giọng đọc trên máy).",
+                        fontSize = 12.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                } else {
+                    availableVoices.take(8).forEach { voiceOpt: TtsVoiceOption ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Checkbox(
+                                checked = config.ttsVoiceName == voiceOpt.name,
+                                onCheckedChange = { checked ->
+                                    val nextVoice = if (checked) voiceOpt.name else ""
+                                    onUpdateConfig(config.copy(ttsVoiceName = nextVoice))
+                                }
+                            )
+                            Text(
+                                voiceOpt.displayLabel,
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedButton(onClick = {
+                                previewSpeaker.baseSpeed = config.ttsBaseSpeed
+                                previewSpeaker.basePitch = config.ttsPitch
+                                previewSpeaker.previewVoice(
+                                    "Xin chào, đây là giọng đọc lồng tiếng trực tiếp.",
+                                    config.targetLanguage,
+                                    voiceOpt.name
+                                )
+                            }) {
+                                Text("▶ Thử", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -758,7 +829,7 @@ private fun HistoryTranscriptTab(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(history.reversed()) { cue ->
+            items(history.reversed(), key = { it.index }) { cue ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
                     shape = RoundedCornerShape(10.dp),

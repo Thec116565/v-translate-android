@@ -30,22 +30,23 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
 
       - name: Prepare APK Release File
-        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.5.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.6.apk
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: VTranslate-Live-Android-Debug-APK
-          path: VTranslate-Live-Android-v1.0.5.apk
+          path: VTranslate-Live-Android-v1.0.6.apk
 
       - name: Publish GitHub Release (Direct APK Download)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.5
-          name: V-Translate Live Android v1.0.5
+          tag_name: v1.0.6
+          name: V-Translate Live Android v1.0.6
           body: |
-            Bản cập nhật **V-Translate Live Android v1.0.5**:
-            - Cập nhật mặc định sang các model Gemini mới nhất còn hoạt động (`gemini-3.8-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`).
-            - Chống dịch lặp nội dung cũ triệt để hơn (`TextDeduplicator` lưu lịch sử 20 câu & chặn lặp câu tĩnh) và đặt mặc định khung phụ đề nổi ở phía trên (`14%`) để không đè lên phụ đề gốc ở dưới gây lặp OCR.
-            - Ẩn thông báo hủy coroutine khi bấm Dừng.
-          files: VTranslate-Live-Android-v1.0.5.apk
+            Bản nâng cấp lớn **V-Translate Live Android v1.0.6**:
+            - **Thanh công cụ dọc nổi (Floating Vertical Toolbar)** khi đang xem Douyin/YouTube: Tạm dừng/Tiếp tục (`▶/⏸`), Dừng (`⏹`), Đổi model nhanh (`🤖`), Đổi chế độ OCR/Audio (`📷/🔊`), Khóa xuyên chạm (`🔒/🔓`), và Thu gọn/Kéo di chuyển (`⚡`).
+            - **Chỉnh sửa vùng quét phụ đề trực tiếp trên màn hình (`🎯`)**: Kéo khung xanh di chuyển và kéo góc `↘` đổi kích thước trực tiếp ngay trên Douyin mà không cần quay lại app.
+            - **Nhiều giọng đọc lựa chọn**: Quét danh sách giọng đọc có sẵn trên máy, chọn giọng và bấm **Nghe thử** ngay trong tab `🎛 Phụ Đề & Giọng`.
+            - **Tối ưu hiệu năng bộ nhớ**: Cắt trực tiếp vùng dải dòng ảnh OCR từ `ImageReader` (giảm ~80% cấp phát RAM mỗi khung hình) & cache cấu hình trong bộ nhớ.
+          files: VTranslate-Live-Android-v1.0.6.apk
