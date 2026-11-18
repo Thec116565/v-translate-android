@@ -18,19 +18,25 @@ class SettingsRepository(context: Context) {
 
         val rawModels = prefs.getString(
             "flash_models",
-            "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-2.5-pro"
+            "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-pro-preview,gemini-2.5-flash"
         ) ?: ""
         val models = rawModels.split(",")
             .map { it.trim() }
-            .filter { it.isNotEmpty() && !it.startsWith("gemini-2.0") }
+            .filter { it.isNotEmpty() && !it.startsWith("gemini-2.0") && it != "gemini-2.5-pro" }
+
+        val savedPref = prefs.getString("preferred_model", "gemini-3.8-flash") ?: "gemini-3.8-flash"
+        val cleanPref = if (savedPref.startsWith("gemini-2.0") || savedPref == "gemini-2.5-pro") {
+            "gemini-3.8-flash"
+        } else {
+            savedPref
+        }
 
         return LiveConfig(
             apiKeys = keys,
-            preferredModel = prefs.getString("preferred_model", "gemini-2.5-flash")
-                ?.takeIf { !it.startsWith("gemini-2.0") } ?: "gemini-2.5-flash",
+            preferredModel = cleanPref,
             autoRotateFlashModels = prefs.getBoolean("auto_rotate_flash", true),
             flashModelPool = models.ifEmpty {
-                listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite")
+                listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview")
             },
             captureMode = CaptureMode.fromId(prefs.getString("capture_mode", CaptureMode.SCREEN_OCR.id)),
             sourceLanguage = prefs.getString("source_lang", "Tự động nhận diện (Auto)") ?: "Tự động nhận diện (Auto)",

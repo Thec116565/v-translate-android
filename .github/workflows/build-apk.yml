@@ -30,21 +30,22 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
 
       - name: Prepare APK Release File
-        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.4.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk VTranslate-Live-Android-v1.0.5.apk
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: VTranslate-Live-Android-Debug-APK
-          path: VTranslate-Live-Android-v1.0.4.apk
+          path: VTranslate-Live-Android-v1.0.5.apk
 
       - name: Publish GitHub Release (Direct APK Download)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.4
-          name: V-Translate Live Android v1.0.4
+          tag_name: v1.0.5
+          name: V-Translate Live Android v1.0.5
           body: |
-            Bản cập nhật **V-Translate Live Android v1.0.4**:
-            - Sửa triệt để lỗi crash Android 14+ khi bấm Bắt đầu dịch màn hình (bổ sung `MediaProjection.registerCallback` trước khi tạo `VirtualDisplay` + bọc an toàn Foreground Service).
-            - Thêm nút **"🔄 Lấy & Xác nhận DS Model còn hoạt động"** trong tab `🔑 API Pool` để kiểm tra và tự động cập nhật các model Gemini còn sống trực tiếp từ Google AI Studio.
-          files: VTranslate-Live-Android-v1.0.4.apk
+            Bản cập nhật **V-Translate Live Android v1.0.5**:
+            - Cập nhật mặc định sang các model Gemini mới nhất còn hoạt động (`gemini-3.8-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`).
+            - Chống dịch lặp nội dung cũ triệt để hơn (`TextDeduplicator` lưu lịch sử 20 câu & chặn lặp câu tĩnh) và đặt mặc định khung phụ đề nổi ở phía trên (`14%`) để không đè lên phụ đề gốc ở dưới gây lặp OCR.
+            - Ẩn thông báo hủy coroutine khi bấm Dừng.
+          files: VTranslate-Live-Android-v1.0.5.apk

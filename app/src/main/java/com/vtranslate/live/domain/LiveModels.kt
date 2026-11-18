@@ -19,13 +19,13 @@ data class OcrRegionPct(
 
 data class LiveConfig(
     val apiKeys: List<String> = emptyList(),
-    val preferredModel: String = "gemini-2.5-flash",
+    val preferredModel: String = "gemini-3.8-flash",
     val autoRotateFlashModels: Boolean = true,
     val flashModelPool: List<String> = listOf(
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
+        "gemini-3.8-flash",
         "gemini-3.5-flash-lite",
-        "gemini-2.5-pro"
+        "gemini-3.1-pro-preview",
+        "gemini-2.5-flash"
     ),
     val captureMode: CaptureMode = CaptureMode.SCREEN_OCR,
     val sourceLanguage: String = "Tự động nhận diện (Auto)",

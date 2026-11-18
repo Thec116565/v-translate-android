@@ -263,6 +263,8 @@ class LiveTranslateForegroundService : Service() {
                 }
                 delay(intervalMs)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             LiveSessionStateBus.log("⚠️ Lỗi quét màn hình OCR: ${e.message}")
         } finally {

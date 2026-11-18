@@ -10,19 +10,21 @@ import kotlin.math.min
  * Prevents duplicate translations when Douyin/TikTok subtitles flicker or animate.
  */
 class TextDeduplicator(
-    private val similarityThreshold: Double = 0.82,
-    private val cooldownMs: Long = 12_000L,
-    private val maxHistory: Int = 6,
+    private val similarityThreshold: Double = 0.80,
+    private val cooldownMs: Long = 45_000L,
+    private val maxHistory: Int = 20,
 ) {
     private data class EmittedItem(val text: String, val timestampMs: Long)
 
     private val history = ArrayDeque<EmittedItem>()
     private var lastCandidate: String = ""
+    private var lastEmittedNorm: String = ""
 
     @Synchronized
     fun reset() {
         history.clear()
         lastCandidate = ""
+        lastEmittedNorm = ""
     }
 
     /**
@@ -32,7 +34,7 @@ class TextDeduplicator(
     fun filterNewSubtitle(rawText: String, nowMs: Long = System.currentTimeMillis()): String? {
         val cleaned = rawText.trim().replace(Regex("\\s+"), " ")
         val norm = normalize(cleaned)
-        if (norm.isEmpty()) return null
+        if (norm.isEmpty() || norm == lastEmittedNorm) return null
 
         // Debounce typing-effect prefixes
         if (lastCandidate.isNotEmpty() &&
@@ -52,6 +54,7 @@ class TextDeduplicator(
             history.removeFirst()
         }
         history.addLast(EmittedItem(cleaned, nowMs))
+        lastEmittedNorm = norm
         return cleaned
     }
 

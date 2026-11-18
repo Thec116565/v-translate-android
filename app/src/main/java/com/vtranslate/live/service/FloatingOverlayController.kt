@@ -97,7 +97,7 @@ class FloatingOverlayController(private val context: Context) {
             ).apply {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                 x = 0
-                y = (dm.heightPixels * 0.72f).toInt()
+                y = (dm.heightPixels * 0.14f).toInt()
             }
 
             var initialX = 0

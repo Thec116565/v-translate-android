@@ -592,7 +592,7 @@ private fun ApiPoolTab(
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("🤖 Mô Hình Gemini Flash Ưu Tiên", fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
-                val models = (config.flashModelPool + listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-pro")).distinct()
+                val models = (config.flashModelPool + listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview", "gemini-2.5-flash")).distinct()
                 models.forEach { m ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
